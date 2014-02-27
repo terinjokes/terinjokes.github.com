@@ -3,11 +3,12 @@ pygments: true
 url: http://terinstock.com
 lsi: false
 exclude: [LICENSE, CNAME, README.md, .gitignore]
+markdown: redcarpet
 
 # Theme customization - please change from the defaults!
 theme:
   # Color for top bar, links, etc
-  highlight_color: '#3498db'
+  highlight_color: '#FF7900'
 
   # Profile links on the left sidebar, leave blank to ignore
   social:
@@ -32,3 +33,6 @@ theme:
 
   # Toggle "Postings are my own" disclaimer in footer
   show_disclaimer: false
+
+redcarpet:
+  extensions: [smart, no_intra_emphasis]
