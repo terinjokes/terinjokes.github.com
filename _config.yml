@@ -1,6 +1,6 @@
 # General Jekyll Config
 pygments: true
-url: http://example.com
+url: http://terinstock.com
 lsi: false
 exclude: [LICENSE, CNAME, README.md, .gitignore]
 
@@ -13,22 +13,22 @@ theme:
   social:
     github: swanson
     #bitbucket: philipj
-    hacker_news: swanson
+    hacker_news: terinjokes
     #stackexchange: 348619
     #stackoverflow: 348619
-    twitter: _swanson
+    twitter: terinjokes
     #facebook: zuck
     #tumblr: animalygifs
     #linkedin: philipjagielski
     #gplus: 110552447039675960964
 
   # "Hi, I'm _______"
-  name: Matt Swanson
-  email: test@example.com
-  tagline: "weak opinions, strongly held"
+  name: Terin Stock
+  email: terin@terinstock.com
+  tagline: "All hail our burrito overlords!"
 
   # Google Analytics key, leave blank to ignore
-  google_analytics_key: UA-xxxx-x
+  google_analytics_key:
 
   # Toggle "Postings are my own" disclaimer in footer
-  show_disclaimer: true
+  show_disclaimer: false
