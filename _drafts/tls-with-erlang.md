@@ -5,22 +5,24 @@ categories:
 - blog
 ---
 
-Recently I configured an HTTP server written in Erlang for secure communication with TLS. When I through I was done, however, I was unable to connect without errors from command line tools or web browsers.
+Recently I configured an HTTP server written in Erlang for secure communication with TLS. Unfortunately, my attempt resulted in SSL errors from browsers and command line tools.
 
 Undeterred, I dug into the HTTP server and Erlang's SSL library.
 
 ## Bundling Intermediate Certificates
 
-If you spring for a cheap SSL certificate, you're likely to also get an intermediate certificate that bridges the trust from the Certificate Authorities trusted by the user-agent to the certificate for your site. If you don't provide the bundle, users might not be able to connect.
+If you spring for a cheap SSL certificate, you're likely to also get an intermediate bundle that bridges the trust from the Certificate Authorities trusted by the user-agent to the certificate for your site. While your certificate authority reminds you, it can be easy to forget to add this bundle to your server configuration.
 
-The intermediate bundle can be passed as the `cacert_file` to Erlang's SSL library.
+Erlang's SSL library accepts the intermediate bundle as the `cacert`.The intermediate bundle can be passed as the `cacertfile` to Erlang's SSL library.
 
-```ini
-; TODO: need new example
-[ssl]
-key_file    = /full/path/to/server_key.pem
-cert_file   = /full/path/to/server_cert.pem
-cacert_file = /full/path/to/bundle.pem
+```erlang
+ssl:start().
+{ok, ListenSocket} = ssl:listen(443, [
+    {certfile, "/full/path/to/server_cert.pem"},
+    {keyfile, "/full/path/to/server_key.pem"},
+    {cacertfile, "/full/path/to/bundle.pem"}
+  ]).
+ssl:transport_accept(ListenSocket).
 ```
 
 Now the required certificate chain will be sent to the user-agent.
@@ -29,11 +31,11 @@ Now the required certificate chain will be sent to the user-agent.
 
 At this point, I expected to be done. Unfortunately, while OpenSSL and tools such as [sslyze](https://github.com/iSECPartners/sslyze) would connect fine, my copies of Chrome, Firefox, and curl refused to connect with cryptic SSL errors such as `ERR_SSL_CLIENT_AUTH_SIGNATURE_FAILED` and `sec_error_invalid_key`. The  net-internals of Chrome, provided no additional information.
 
-With Wireshark, I logged traffic on port 6984, and found that the client and server exchanged `ClientHello`, `ServerHello`, `Certificate`, `ServerKeyExchange`, and `ServerHelloDone` before the browser unexpectedly closed the connection.
+With Wireshark, I logged the SSL traffic, and found that the client and server exchanged `ClientHello`, `ServerHello`, `Certificate`, `ServerKeyExchange`, and `ServerHelloDone` before the browser unexpectedly closed the connection.
 
 Inspecting the ServerHello message informed me the server agreed on using TLS 1.2 and choose the `TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA` cipher suite. Both supported by the browser.
 
-From [RFC4492](http://tools.ietf.org/rfc/rfc4492.txt), in ECDHE_ECDSA, ECDHE_RSA, and ECDH_anon the ServerKeyExchange message contains the ECDHE public key use to derive the shared key. A snippet of the TLS handshake from the server to the client is replicated below.
+From [RFC4492](http://tools.ietf.org/rfc/rfc4492.txt), when the ECDHE_ECDSA, ECDHE_RSA, or ECDH_anon ciphers are chosen, the ServerKeyExchange message contains the ECDHE public key used to derive the shared key. A snippet of the TLS handshake from the server to the client is replicated below.
 
 ```
 0000   0c 00 01 49 03 00 16 41 04 b2 33 23 71 c9 da 80
@@ -63,25 +65,33 @@ From [RFC4492](http://tools.ietf.org/rfc/rfc4492.txt), in ECDHE_ECDSA, ECDHE_RSA
 * `00 01 49` is the length of 0x000149 (in decimal, 329) bytes
 * `03` is the elliptical curve type, in this case "named_curve"
 * `00 16` is the named curve, `secp256k1`
-* What follows is the ECDHE public key and the signature.
+* The ECDHE public key and signature follow.
 
-At this point the browser verifies the signature and retrieves the elliptic curve parameters and ECDHE public key from the ServerKeyExchange message. Section 5.4 of RFC4492 ends with the following note:
+At this point the browser verifies the signature and retrieves the elliptic curve parameters and ECDHE public key from the ServerKeyExchange message.
+
+Section 5.4 of RFC4492 ends with the following note:
 
 > A possible reason for a fatal handshake failure is that the client's capabilities for handling elliptic curves and point formats are exceeded
 
-While Erlang supports all 25 elliptic curves named in RFC4492, my browsers only support three: secp192r1, secp224r1, and secp256r1. In the above snippet, we see that Erlang choose secp256k1, the elliptic curve used in [Bitcoin](https://en.bitcoin.it/wiki/Secp256k1).
+While Erlang supports all 25 elliptic curves named in RFC4492, the common browsers only support three: secp192r1, secp224r1, and secp256r1. In the above snippet, we see that Erlang chose secp256k1, the elliptic curve used in [Bitcoin](https://en.bitcoin.it/wiki/Secp256k1).
 
-The version of Erlang shipped with Ubuntu 13.10 has an issue where it doesn't consider the elliptic curves the client announces it supports in the ClientHello message when picking a cipher for the ServerKeyExchange. This had been resolved with the  [Erlang R16R03-1](http://www.erlang.org/download_release/23) release.
+Early support of elliptic curves in Erlang does not consider the elliptic curvers the client announces support for in the ClientHello message when picking a cipher. This has been resolved with the [Erlang R16R03-1](http://www.erlang.org/download_release/23) release.
 
 ## Configuration of TLS and Ciphers
 
 Erlang's SSL library has defaults for the TLS versions, cipher suites and renegotiation behavior. You may want to change these options for client compatiblity and for resiliency to TLS attacks.
 
 ```erlang
-% new example neeeded
+ssl:start().
+{ok, ListenSocket} = ssl:listen(443, [
+    {server_renegotiate, true},
+    {versions: [ "tlsv1.1", "tlsv1.2" ]},
+    {ciphers: [ "ECDHE-ECDSA-AES128-SHA256", "ECDHE-ECDSA-AES128-SHA" ]}
+  ]).
+ssl:transport_accept(ListenSocket).
 ```
 
-[CloudFlare publishes](https://support.cloudflare.com/hc/en-us/articles/200933580) the cipher suites they use with nginx, though unfortunately Erlang doesn't yet support all of them. You can check the ciphers supported by your installation by  running the following in a `erl` session.
+[CloudFlare publishes](https://support.cloudflare.com/hc/en-us/articles/200933580) the cipher suites they use with nginx. You can check the ciphers supported by your Erlang installation by running the following in a `erl` session.
 
 ```erlang
 rp(ssl:cipher_suites(openssl)).
@@ -91,6 +101,9 @@ I created [a patch](https://git-wip-us.apache.org/repos/asf?p=couchdb.git;a=comm
 
 ```ini
 [ssl]
+certfile           = /full/path/to/server_cert.pem
+keyfile            = /full/path/to/server_key.pem
+cacertfile         = /full/path/tp/bundle.pem
 secure_renegotiate = true
 tls_versions       = [ "tlsv1.1", "tlsv1.2" ]
 ciphers            = [ "ECDHE-ECDSA-AES128-SHA256", "ECDHE-ECDSA-AES128-SHA" ]
