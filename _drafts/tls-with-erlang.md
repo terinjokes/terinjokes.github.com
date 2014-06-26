@@ -11,7 +11,7 @@ Undeterred, I dug into the HTTP server and Erlang's SSL library.
 
 ## Bundling Intermediate Certificates
 
-If you spring for a cheap SSL certificate, you're likely to also get an intermediate bundle that bridges the trust from the Certificate Authorities trusted by the user-agent to the certificate for your site. While your certificate authority reminds you, it can be easy to forget to add this bundle to your server configuration.
+If you spring for a cheap SSL certificate, you're likely to also get an intermediate bundle. This bridges the trust from the Certificate Authorities trusted by the user-agent to the certificate for your site. While your certificate authority probably reminds you, it can be easy to forget to add this bundle to your server configuration.
 
 Erlang's SSL library accepts the intermediate bundle as the `cacert`.The intermediate bundle can be passed as the `cacertfile` to Erlang's SSL library.
 
@@ -29,13 +29,13 @@ Now the required certificate chain will be sent to the user-agent.
 
 ## Ode to Debugging SSL
 
-At this point, I expected to be done. Unfortunately, while OpenSSL and tools such as [sslyze](https://github.com/iSECPartners/sslyze) would connect fine, my copies of Chrome, Firefox, and curl refused to connect with cryptic SSL errors such as `ERR_SSL_CLIENT_AUTH_SIGNATURE_FAILED` and `sec_error_invalid_key`. The  net-internals of Chrome, provided no additional information.
+At this point, I expected to be done. Unfortunately, while OpenSSL and tools such as [sslyze](https://github.com/iSECPartners/sslyze) would connect fine, my copies of Chrome, Firefox, and curl refused to connect with cryptic SSL errors such as `ERR_SSL_CLIENT_AUTH_SIGNATURE_FAILED` and `sec_error_invalid_key`. The net-internals of Chrome, provided no additional information.
 
 With Wireshark, I logged the SSL traffic, and found that the client and server exchanged `ClientHello`, `ServerHello`, `Certificate`, `ServerKeyExchange`, and `ServerHelloDone` before the browser unexpectedly closed the connection.
 
 Inspecting the ServerHello message informed me the server agreed on using TLS 1.2 and choose the `TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA` cipher suite. Both supported by the browser.
 
-From [RFC4492](http://tools.ietf.org/rfc/rfc4492.txt), when the ECDHE_ECDSA, ECDHE_RSA, or ECDH_anon ciphers are chosen, the ServerKeyExchange message contains the ECDHE public key used to derive the shared key. A snippet of the TLS handshake from the server to the client is replicated below.
+From [RFC4492](http://tools.ietf.org/rfc/rfc4492.txt), when the `ECDHE_ECDSA`, `ECDHE_RSA`, or `ECDH_anon` ciphers are chosen, the ServerKeyExchange message contains the ECDHE public key used to derive the shared key. A snippet of the TLS handshake from the server to the client is replicated below.
 
 ```
 0000   0c 00 01 49 03 00 16 41 04 b2 33 23 71 c9 da 80
@@ -79,7 +79,7 @@ Early support of elliptic curves in Erlang does not consider the elliptic curver
 
 ## Configuration of TLS and Ciphers
 
-Erlang's SSL library has defaults for the TLS versions, cipher suites and renegotiation behavior. You may want to change these options for client compatiblity and for resiliency to TLS attacks.
+Erlang's SSL library has defaults for the TLS versions, cipher suites and renegotiation behavior. You may want to change these options for client compatibility and for resiliency to TLS attacks.
 
 ```erlang
 ssl:start().
