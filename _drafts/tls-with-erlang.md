@@ -5,15 +5,15 @@ categories:
 - blog
 ---
 
-Recently I configured an HTTP server written in Erlang for secure communication with TLS. Unfortunately, my attempt resulted in SSL errors from browsers and command line tools.
+I recently configured an HTTP server written in Erlang for secure communication with Transport Layer Security (TLS), successor to Secure Sockets Layer (SSL). Unfortunately, my attempt resulted in TLS errors from both browsers and command line tools.  Determined to find a solution, I dug into the HTTP server and Erlang's SSL library to resolve these TLS connection failures.
 
-Undeterred, I dug into the HTTP server and Erlang's SSL library.
+In the process I uncovered issues with intermediate bundles and elliptic curve selections, as well as a configuration optimization.
 
 ## Bundling Intermediate Certificates
 
-If you spring for a cheap SSL certificate, you're likely to also get an intermediate bundle. This bridges the trust from the Certificate Authorities trusted by the user-agent to the certificate for your site. While your certificate authority probably reminds you, it can be easy to forget to add this bundle to your server configuration.
+When you buy a certificate for your site, you're likely to also receive an intermediate bundle. This intermediate bundle is a chain of certificates that bind the certificate issued for your site to a trusted certificate located on the user's computer or browser (a "root certificate"). If this bundle is excluded, the browser won't trust the connection, since it can't verify each link of the chain.
 
-Erlang's SSL library accepts the intermediate bundle as the `cacert`.The intermediate bundle can be passed as the `cacertfile` to Erlang's SSL library.
+The issuer reminds you to add this bundle to your server's configuration—it is important not to forget this step! Erlang's SSL library can be configured to include the intermediate bundle by providing the path to the `cacertfile` option.
 
 ```erlang
 ssl:start().
@@ -25,17 +25,53 @@ ssl:start().
 ssl:transport_accept(ListenSocket).
 ```
 
-Now the required certificate chain will be sent to the user-agent.
+Erlang will now send the entire certificate chain to the browser during the connection, and the browser can trust the connection.
 
-## Ode to Debugging SSL
+## Ode to Debugging TLS
 
 At this point, I expected to be done. Unfortunately, while OpenSSL and tools such as [sslyze](https://github.com/iSECPartners/sslyze) would connect fine, my copies of Chrome, Firefox, and curl refused to connect with cryptic SSL errors such as `ERR_SSL_CLIENT_AUTH_SIGNATURE_FAILED` and `sec_error_invalid_key`. The net-internals of Chrome, provided no additional information.
 
+### TLS Handshakes: A Primer
+
+To start a connection to a secure site, the client and browser must first configure the secure connection in a process commonly called a "TLS Handshake".
+
+In a full handshake, two roundtrips between the browser and the server are required:
+
+* The browser sends a `ClientHello` message to the server.
+
+  This message includes the highest TLS version supported, lists of supported cipher suites and compression algorithms, and other TLS extensions, including a list of known named elliptic curves.
+
+* The server responds with `ServerHello`, `Certificate`, an optional `ServerKeyExchange` message, and `ServerHelloDone` messages.
+
+  The `ServerHello` message details specific options used for the connections including the TLS version, the cipher suite, the compression algorithm, and any additional TLS extensions. The TLS version should be the highest version support by both client and server. The server maintains a priority list for cipher suites and compression algorithms, and it selects the highest priority supported by the browser.
+
+  The server then attaches the entire certificate chain in a `Certificate` message, so the browser can verify the authenticity of the connection.
+
+  If the `Certificate` message doesn't contain enough information to allow a client to exchange a session key, such as with a Diffie–Hellman key exchange, then a `ServerKeyExchange` message is included.
+
+  The server then ends with `ServerHelloDone`.
+
+* The client responds with a `ClientKeyExchange`, `ChangeCipherSpec` and `Finished` messages.
+
+  The `ClientKeyExchange` message contains a secret key determined by both sides using public key encryption. The specifics of how the session key is generated is outside the scope of this primer.
+
+  With the `ChangeCipherSpec` message, the browser tells the server to switch to encrypted communication for the rest of the communication.
+
+  To verify the integrity of the communications up to this point, a hash of the previous messages is taken and sent as part of the `Finished` message. The server will also compute a hash over the same messages and compare.
+
+* Finally, the server sends `ChangeCipherSpec` and `Finished` messages.
+
+  The server verifies the hash sent in the client's `Finished` message, then acknowledges the encryption communications and finishes, sending a similar hash to the client.
+
+### The Failed TLS Handshake
+
 With Wireshark, I logged the SSL traffic, and found that the client and server exchanged `ClientHello`, `ServerHello`, `Certificate`, `ServerKeyExchange`, and `ServerHelloDone` before the browser unexpectedly closed the connection.
 
-Inspecting the ServerHello message informed me the server agreed on using TLS 1.2 and choose the `TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA` cipher suite. Both supported by the browser.
+Inspecting the `ServerHello` message informed me the server agreed on using TLS 1.2 and choose the `TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA` cipher suite. Both supported by the browser.
 
-From [RFC4492](http://tools.ietf.org/rfc/rfc4492.txt), when the `ECDHE_ECDSA`, `ECDHE_RSA`, or `ECDH_anon` ciphers are chosen, the ServerKeyExchange message contains the ECDHE public key used to derive the shared key. A snippet of the TLS handshake from the server to the client is replicated below.
+From [RFC4492](http://tools.ietf.org/rfc/rfc4492.txt), when the `ECDHE_ECDSA`, `ECDHE_RSA`, or `ECDH_anon` ciphers are chosen, the `ServerKeyExchange` message contains the ECDHE public key used to derive the shared key.
+
+The `ServerKeyExchange` portion of the TLS handshake from the server to the client is replicated below.
 
 ```
 0000   0c 00 01 49 03 00 16 41 04 b2 33 23 71 c9 da 80
@@ -61,21 +97,21 @@ From [RFC4492](http://tools.ietf.org/rfc/rfc4492.txt), when the `ECDHE_ECDSA`, `
 0140   5f 5c 91 47 b3 19 1c 00 69 7f 17 1b c3
 ```
 
-* `0c` indicates this message is a ServeryKeyExchange message
+* `0c` indicates this message is a `ServerKeyExchange` message
 * `00 01 49` is the length of 0x000149 (in decimal, 329) bytes
 * `03` is the elliptical curve type, in this case "named_curve"
 * `00 16` is the named curve, `secp256k1`
-* The ECDHE public key and signature follow.
+* The ECDHE public key and signature follows.
 
-At this point the browser verifies the signature and retrieves the elliptic curve parameters and ECDHE public key from the ServerKeyExchange message.
+At this point the browser verifies the signature and retrieves the elliptic curve parameters and ECDHE public key from the `ServerKeyExchange` message.
 
 Section 5.4 of RFC4492 ends with the following note:
 
 > A possible reason for a fatal handshake failure is that the client's capabilities for handling elliptic curves and point formats are exceeded
 
-While Erlang supports all 25 elliptic curves named in RFC4492, the common browsers only support three: secp192r1, secp224r1, and secp256r1. In the above snippet, we see that Erlang chose secp256k1, the elliptic curve used in [Bitcoin](https://en.bitcoin.it/wiki/Secp256k1).
+While Erlang supports all 25 elliptic curves named in RFC4492, the common browsers only support three: `secp192r1`, `secp224r1`, and `secp256r1`. In the above snippet, we see that Erlang chose `secp256k1`, the elliptic curve used in [Bitcoin](https://en.bitcoin.it/wiki/Secp256k1).
 
-Early support of elliptic curves in Erlang does not consider the elliptic curvers the client announces support for in the ClientHello message when picking a cipher. This has been resolved with the [Erlang R16R03-1](http://www.erlang.org/download_release/23) release.
+Erlang's early support of elliptic curves are problematic. When picking an elliptic curve, Erlang does not consider the list of supported curves sent by the browser. This has been resolved with the [Erlang R16R03-1](http://www.erlang.org/download_release/23) release.
 
 ## Configuration of TLS and Ciphers
 
@@ -108,3 +144,7 @@ secure_renegotiate = true
 tls_versions       = [ "tlsv1.1", "tlsv1.2" ]
 ciphers            = [ "ECDHE-ECDSA-AES128-SHA256", "ECDHE-ECDSA-AES128-SHA" ]
 ```
+
+---
+
+While presented through the lens of an HTTP server in Erlang, the basics of TLS are the same for any secure server written in any language. Ensure the server is configured to send the entire certificate chain to the client, test the connection with a tool like sslyze or looking at the connection yourself with like Wireshark. Finally, once the server is properly communicating, take a look at your server's TLS configuration to ensure they are secure and reflect current best practices.
