@@ -147,4 +147,4 @@ ciphers            = [ "ECDHE-ECDSA-AES128-SHA256", "ECDHE-ECDSA-AES128-SHA" ]
 
 ---
 
-While presented through the lens of an HTTP server in Erlang, the basics of TLS are the same for any secure server written in any language. Ensure the server is configured to send the entire certificate chain to the client, test the connection with a tool like sslyze or looking at the connection yourself with like Wireshark. Finally, once the server is properly communicating, take a look at your server's TLS configuration to ensure they are secure and reflect current best practices.
+While presented through the lens of an HTTP server in Erlang, the basics of TLS are the same for any secure server written in any language. Ensure the server is configured to send the entire certificate chain to the client, test the connection with a tool like sslyze or look at the connection yourself with something like Wireshark. Finally, once the server is properly communicating, take a look at your server's TLS configuration to ensure they are secure and reflect current best practices.
