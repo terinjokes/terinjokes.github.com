@@ -99,7 +99,7 @@ The `ServerKeyExchange` portion of the TLS handshake from the server to the clie
 
 * `0c` indicates this message is a `ServerKeyExchange` message
 * `00 01 49` is the length of 0x000149 (in decimal, 329) bytes
-* `03` is the elliptical curve type, in this case "named_curve"
+* `03` is the elliptic curve type, in this case "named_curve"
 * `00 16` is the named curve, `secp256k1`
 * The ECDHE public key and signature follows.
 
