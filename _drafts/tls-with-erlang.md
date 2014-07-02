@@ -29,7 +29,7 @@ Erlang will now send the entire certificate chain to the browser during the conn
 
 ## Ode to Debugging TLS
 
-At this point, I expected to be done. Unfortunately, while OpenSSL and tools such as [sslyze](https://github.com/iSECPartners/sslyze) would connect fine, my copies of Chrome, Firefox, and curl refused to connect with cryptic SSL errors such as `ERR_SSL_CLIENT_AUTH_SIGNATURE_FAILED` and `sec_error_invalid_key`. The net-internals of Chrome, provided no additional information.
+At this point, I expected to be done. Unfortunately, while OpenSSL and TLS scanning tools such as [sslyze](https://github.com/iSECPartners/sslyze) would connect fine, my copies of Chrome, Firefox, and curl refused to connect with cryptic SSL errors such as `ERR_SSL_CLIENT_AUTH_SIGNATURE_FAILED` and `sec_error_invalid_key`. Chrome's debugging logs provided no additional information.
 
 ### TLS Handshakes: A Primer
 
@@ -65,11 +65,11 @@ In a full handshake, two roundtrips between the browser and the server are requi
 
 ### The Failed TLS Handshake
 
-With Wireshark, I logged the SSL traffic, and found that the client and server exchanged `ClientHello`, `ServerHello`, `Certificate`, `ServerKeyExchange`, and `ServerHelloDone` before the browser unexpectedly closed the connection.
+Interested in understanding the exact exchange between my browser and the server, I logged the TLS traffic with the network protocol analyzer Wireshark. The browser and the server successfully exchanged `ClientHello`, `ServerHello`, `Certificate`, `ServerKeyExchange`, and `ServerHelloDone` messages before the browser unexpectedly closed the connection.
 
 Inspecting the `ServerHello` message informed me the server agreed on using TLS 1.2 and choose the `TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA` cipher suite. Both supported by the browser.
 
-From [RFC4492](http://tools.ietf.org/rfc/rfc4492.txt), when the `ECDHE_ECDSA`, `ECDHE_RSA`, or `ECDH_anon` ciphers are chosen, the `ServerKeyExchange` message contains the ECDHE public key used to derive the shared key.
+From [RFC4492](http://tools.ietf.org/rfc/rfc4492.txt), when the `ECDHE_ECDSA`, `ECDHE_RSA`, or `ECDH_anon` ciphers are chosen, a `ServerKeyExchange` message is sent containing the ECDHE public key used to derive the shared key.
 
 The `ServerKeyExchange` portion of the TLS handshake from the server to the client is replicated below.
 
@@ -147,4 +147,4 @@ ciphers            = [ "ECDHE-ECDSA-AES128-SHA256", "ECDHE-ECDSA-AES128-SHA" ]
 
 ---
 
-While presented through the lens of an HTTP server in Erlang, the basics of TLS are the same for any secure server written in any language. Ensure the server is configured to send the entire certificate chain to the client, test the connection with a tool like sslyze or looking at the connection yourself with like Wireshark. Finally, once the server is properly communicating, take a look at your server's TLS configuration to ensure they are secure and reflect current best practices.
+While presented through the lens of an HTTP server in Erlang, the same basic steps could be extrapolated to any secure server written in any language. Recapping my debugging process: First, I ensured the server is configured to send the entire certificate chain to the client. Then, I tested the connection with a TLS scanner or a network protocol analyzer. Finally, once the server is properly communicating, I took a look at my server's TLS configuration to ensure it is secure and reflect current best practices.
