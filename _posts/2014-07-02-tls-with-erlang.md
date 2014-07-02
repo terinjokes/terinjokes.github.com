@@ -109,7 +109,7 @@ Section 5.4 of RFC4492 ends with the following note:
 
 > A possible reason for a fatal handshake failure is that the client's capabilities for handling elliptic curves and point formats are exceeded
 
-While Erlang supports all 25 elliptic curves named in RFC4492, the common browsers only support three: `secp192r1`, `secp224r1`, and `secp256r1`. In the above snippet, we see that Erlang chose `secp256k1`, the elliptic curve used in [Bitcoin](https://en.bitcoin.it/wiki/Secp256k1).
+While Erlang supports all 25 elliptic curves named in RFC4492, common browsers only support a smaller subset of two or three. In the above snippet, we see that Erlang chose `secp256k1`, the elliptic curve used in [Bitcoin](https://en.bitcoin.it/wiki/Secp256k1), and not one supported by my browsers.
 
 Erlang's early support of elliptic curves are problematic. When picking an elliptic curve, Erlang does not consider the list of supported curves sent by the browser. This has been resolved with the [Erlang R16R03-1](http://www.erlang.org/download_release/23) release.
 
@@ -148,3 +148,7 @@ ciphers            = [ "ECDHE-ECDSA-AES128-SHA256", "ECDHE-ECDSA-AES128-SHA" ]
 ---
 
 While presented through the lens of an HTTP server in Erlang, the same basic steps could be extrapolated to any secure server written in any language. Recapping my debugging process: First, I ensured the server is configured to send the entire certificate chain to the client. Then, I tested the connection with a TLS scanner or a network protocol analyzer. Finally, once the server is properly communicating, I took a look at my server's TLS configuration to ensure it is secure and reflect current best practices.
+
+---
+
+**Edit:** An earlier version of this post claimed browsers only supported three elliptic curves: `secp192r1`, `secp224r1`, and `secp256r1`. This information was incorrectly included from an earlier draft.
