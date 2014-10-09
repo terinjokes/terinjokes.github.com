@@ -33,12 +33,14 @@ As I want to replace Underscore in Backbone, Marionnette and related packages, t
       "backbone.babysitter",
       "backbone.wreqr"
     ],
-    "all": {
+    "build": {
       "underscore.js$": "lodash"
     }
   }
 }
 ```
+
+> Note that `"build"` is the [`BROWSERIFYSWAP_ENV`](https://github.com/thlorenz/browserify-swap#packagejson).
 
 I was a bit discouraged to find that Underscore was still present in the output bundle. After triple-checking that my configuration was valid, I broke out the node debugger to find what was wrong.
 
@@ -60,7 +62,7 @@ With this information in hand, it became clear that we needed to swap in the `un
     "@packages": [
       "underscore"
     ],
-    "all": {
+    "build": {
       "underscore.js$": "lodash"
     }
   }
