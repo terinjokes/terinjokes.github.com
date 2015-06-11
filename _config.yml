@@ -1,0 +1,38 @@
+# General Jekyll Config
+pygments: true
+url: http://terinstock.com
+lsi: false
+exclude: [LICENSE, CNAME, README.md, .gitignore]
+markdown: redcarpet
+
+# Theme customization - please change from the defaults!
+theme:
+  # Color for top bar, links, etc
+  highlight_color: '#FF7900'
+
+  # Profile links on the left sidebar, leave blank to ignore
+  social:
+    github: terinjokes
+    #bitbucket: philipj
+    hacker_news: terinjokes
+    #stackexchange: 348619
+    #stackoverflow: 348619
+    twitter: terinjokes
+    #facebook: zuck
+    #tumblr: animalygifs
+    linkedin: terin
+    #gplus: 110552447039675960964
+
+  # "Hi, I'm _______"
+  name: Terin Stock
+  email: terin@terinstock.com
+  tagline: "Web Performance Engineer"
+
+  # Google Analytics key, leave blank to ignore
+  google_analytics_key:
+
+  # Toggle "Postings are my own" disclaimer in footer
+  show_disclaimer: false
+
+redcarpet:
+  extensions: [smart, no_intra_emphasis]
